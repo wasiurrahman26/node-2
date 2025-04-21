@@ -1,0 +1,63 @@
+#!/bin/bash
+
+VERBOSITY=${GETH_VERBOSITY:-3}
+GETH_MAXPEERS=${GETH_MAXPEERS:-100}
+GETH_DATA_DIR=/data
+GETH_NODEKEY_FILE="$GETH_DATA_DIR/geth/nodekey"
+RPC_PORT="${RPC_PORT:-8545}"
+WS_PORT="${WS_PORT:-8546}"
+AUTHRPC_PORT="${AUTHRPC_PORT:-8551}"
+METRICS_PORT="${METRICS_PORT:-6060}" # 6060 is the default metrics port of geth
+TXPOOL_PRICE_LIMIT=${TXPOOL_PRICE_LIMIT:-50} # minimum gas fee configuration we're gonna accept into txpool
+GETH_CACHE="${GETH_CACHE:-16384}" # 16384 is 4x mainnet (4gb)
+GETH_MINER_EFFECTIVEGASLIMIT="${GETH_MINER_EFFECTIVEGASLIMIT:-0}" # default 0 means no artificial limit, we'll default to the limit dicated by elasticity
+ADDITIONAL_ARGS=""
+
+# Get the host IP address, defaulting to 0.0.0.0 if not set
+HOST_IP="${HOST_IP:-0.0.0.0}"
+
+mkdir -p $GETH_DATA_DIR
+
+# remove the snapshot-restored nodekey so that each node has its own identity
+rm -f $GETH_NODEKEY_FILE
+
+if [ "${OP_NODE_L2_ENGINE_AUTH_RAW+x}" = x ]; then
+  echo "$OP_NODE_L2_ENGINE_AUTH_RAW" > "$OP_NODE_L2_ENGINE_AUTH"
+fi
+
+exec ./geth \
+  --datadir="$GETH_DATA_DIR" \
+  --verbosity="$VERBOSITY" \
+  --log.format=json \
+  --http \
+  --http.corsdomain="*" \
+  --http.vhosts="*" \
+  --http.addr=0.0.0.0 \
+  --http.port="$RPC_PORT" \
+  --http.api=web3,debug,eth,txpool,net,engine,miner \
+  --authrpc.addr=0.0.0.0 \
+  --authrpc.port="$AUTHRPC_PORT" \
+  --authrpc.vhosts="*" \
+  --authrpc.jwtsecret="$OP_NODE_L2_ENGINE_AUTH" \
+  --ws \
+  --ws.addr=0.0.0.0 \
+  --ws.port="$WS_PORT" \
+  --ws.origins="*" \
+  --ws.api=debug,eth,txpool,net,engine,miner \
+  --metrics \
+  --metrics.addr=0.0.0.0 \
+  --metrics.port="$METRICS_PORT" \
+  --syncmode=full \
+  --gcmode=archive \
+  --maxpeers="$GETH_MAXPEERS" \
+  --nat=extip:$HOST_IP \
+  --cache="$GETH_CACHE" \
+  --nodiscover \
+  --op-network=$OP_NODE_NETWORK \
+  --txpool.nolocals=true \
+  --txpool.journalremotes=true \
+  --txpool.pricelimit="$TXPOOL_PRICE_LIMIT" \
+  --miner.recommit=100ms \
+  --rollup.halt=major \
+  --miner.effectivegaslimit="$GETH_MINER_EFFECTIVEGASLIMIT" \
+  $ADDITIONAL_ARGS # intentionally unquoted, so that arguments are split 

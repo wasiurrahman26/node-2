@@ -1,0 +1,42 @@
+#!/bin/bash
+set -eu
+
+IPC_PATH="/data/reth.ipc"
+RETH_DATA_DIR="/data/reth"
+RETH_DISCOVERY_SECRET="$RETH_DATA_DIR/discovery-secret"
+RPC_PORT="${RPC_PORT:-8545}"
+WS_PORT="${WS_PORT:-8546}"
+AUTHRPC_PORT="${AUTHRPC_PORT:-8551}"
+METRICS_PORT="${METRICS_PORT:-9001}"
+ADDITIONAL_ARGS=""
+
+# Get the host IP address, defaulting to 0.0.0.0 if not set
+HOST_IP="${HOST_IP:-0.0.0.0}"
+
+mkdir -p $RETH_DATA_DIR
+
+# remove the snapshot-restored discovery secret so that each node has its own identity
+rm -f $RETH_DISCOVERY_SECRET
+
+echo "<OP node engine auth JWT>"  > /tmp/engine-auth-jwt
+
+exec ./op-reth node \
+  -$(printf 'v%.0s' $(eval echo {1..${OP_RETH_VERBOSITY:-3}})) \
+  --datadir="$RETH_DATA_DIR" \
+  --log.stdout.format json \
+  --http \
+  --http.corsdomain="*" \
+  --http.addr=0.0.0.0 \
+  --http.port="$RPC_PORT" \
+  --http.api=debug,eth,net,txpool,miner \
+  --ipcpath="$IPC_PATH" \
+  --authrpc.addr=0.0.0.0 \
+  --authrpc.port="$AUTHRPC_PORT" \
+  --authrpc.jwtsecret="$OP_NODE_L2_ENGINE_AUTH" \
+  --metrics=0.0.0.0:"$METRICS_PORT" \
+  --max-outbound-peers=100 \
+  --chain "$RETH_CHAIN" \
+  --nat=extip:$HOST_IP \
+  --rollup.sequencer-http=$OP_RETH_SEQUENCER_HTTP \
+  --rollup.disable-tx-pool-gossip \
+  $ADDITIONAL_ARGS # intentionally unquoted, so that arguments are split 

@@ -1,10 +1,8 @@
 ![Base](logo.webp)
 
-# Base node
+# Base Node
 
-Base is a secure, low-cost, developer-friendly Ethereum L2 built to bring the next billion users onchain. It's built on Optimism’s open-source [OP Stack](https://stack.optimism.io/).
-
-This repository contains the relevant Docker builds to run your own node on the Base network.
+Base is a secure, low-cost, developer-friendly Ethereum L2 built on Optimism's open-source [OP Stack](https://stack.optimism.io/). This repository contains Docker builds to run your own node on the Base network.
 
 <!-- Badge row 1 - status -->
 
@@ -27,97 +25,160 @@ This repository contains the relevant Docker builds to run your own node on the 
 [![GitHub pull requests by-label](https://img.shields.io/github/issues-pr-raw/base-org/node)](https://github.com/base-org/node/pulls)
 [![GitHub Issues](https://img.shields.io/github/issues-raw/base-org/node.svg)](https://github.com/base-org/node/issues)
 
-### Hardware requirements
+## Quick Start
 
-We recommend you have this hardware configuration to run a node:
+1. **Prerequisites**: Ensure you have an Ethereum L1 full node RPC available (not Base)
+2. **Setup**:
+   ```bash
+   cp .env.example .env
+   ```
+3. **Configure**: Edit `.env` to set:
+   - Network: `NETWORK=mainnet` or `NETWORK=sepolia`
+   - Client: `CLIENT=geth` or `CLIENT=reth`
+   - L1 endpoints and other required values
+4. **Run**:
+   ```bash
+   docker compose up --build
+   ```
+5. **Verify**:
+   ```bash
+   curl -d '{"id":0,"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false]}' \
+     -H "Content-Type: application/json" http://localhost:8545
+   ```
 
-- a modern multi-core CPU with good single-core performance
-- at least 16 GB RAM (32 GB recommended)
-- a locally attached NVMe SSD drive
-- adequate storage capacity to accommodate both the snapshot restoration process (if restoring from snapshot) and chain data, ensuring a minimum of (2 \* current_chain_size) + snapshot_size + 20%\_buffer
+## Supported Networks
 
-**Note:** If utilizing Amazon Elastic Block Store (EBS), ensure timing buffered disk reads are fast enough in order to avoid latency issues alongside the rate of new blocks added to Base during the initial synchronization process; `io2 block express` is recommended.
+| Base Network      | Status | Node Type | Client |
+| ----------------- | ------ | --------- | ------ |
+| Testnet (Sepolia) | ✅     | Full      | Geth   |
+| Mainnet           | ✅     | Full      | Geth   |
+| Mainnet           | ✅     | Archive   | Reth   |
 
-### Troubleshooting
+**Note:** Archive nodes are only supported with Reth client. Geth nodes are full nodes only.
 
-If you encounter problems with your node, please open a [GitHub issue](https://github.com/base-org/node/issues/new/choose) or reach out on our [Discord](https://discord.gg/buildonbase):
+## Environment Files
 
-- Once you've joined, in the Discord app go to `server menu` > `Linked Roles` > `connect GitHub` and connect your GitHub account so you can gain access to our developer channels
-- Report your issue in `#🛟|developer-support` or `🛠｜node-operators`
+The configuration is organized into four files:
 
-### Supported networks
+- `.env` - Base configuration with network and client selection
+- `.env.geth` - Geth-specific configurations
+- `.env.reth` - Reth-specific configurations
+- `.env.example` - Template showing required values
 
-| Base Network      | Status |
-|-------------------| ------ |
-| Testnet (Sepolia) | ✅     |
-| Mainnet           | ✅     |
+The `.env` file automatically sources the appropriate client configuration based on your `CLIENT` selection.
 
-### Usage
+### Required Configuration
 
-1. Ensure you have an Ethereum L1 full node RPC available (not Base), and set `OP_NODE_L1_ETH_RPC` (in the `.env.*` file if using docker-compose). If running your own L1 node, it needs to be synced before Base will be able to fully sync.
-2. Uncomment the line relevant to your network (`.env.sepolia`, or `.env.mainnet`) under the 2 `env_file` keys in `docker-compose.yml`.
-3. Run:
+The following values must be set in your environment:
 
+- `NETWORK` - Network to connect to (`mainnet` or `sepolia`)
+- `CLIENT` - Client to use (`geth` or `reth`)
+- `OP_NODE_L1_ETH_RPC` - Your L1 Ethereum node RPC URL
+- `OP_NODE_L1_BEACON` - Your L1 Ethereum beacon node URL (required for both clients)
+- `OP_NODE_L1_BEACON_ARCHIVER` - (Reth archive nodes only) Your L1 blob archiver URL for historical data access
+
+**Note:** For Reth archive nodes, you need both beacon endpoints:
+
+- `OP_NODE_L1_BEACON` for current consensus data
+- `OP_NODE_L1_BEACON_ARCHIVER` for historical blob data (Dencun upgrade)
+
+### Sync Mode Configuration
+
+By default, both Geth and Reth nodes use execution layer syncing (`OP_NODE_SYNCMODE=execution-layer`). This mode:
+
+- Syncs from the execution layer first
+- Provides faster initial sync times
+- Is recommended for most users
+
+For experimental features, you can enable:
+
+- Snap sync for Geth: `OP_GETH_SYNCMODE=snap`
+
+### Geth Configuration Options
+
+For Geth nodes, you can configure the following options in `.env.geth`:
+
+- `DB_ENGINE` - Database engine to use: `pebble` (default, recommended) or `leveldb`
+- `GETH_CACHE` - Memory cache size in MB
+- `GETH_TXPOOL_GLOBALQUEUE` - Maximum number of non-executable transaction slots for all accounts
+- `GETH_TXPOOL_GLOBALSLOTS` - Maximum number of executable transaction slots for all accounts
+- `HOST_IP` - External IP address for NAT traversal (defaults to 0.0.0.0)
+
+### Reth Configuration Options
+
+For Reth nodes, you can configure the following options in `.env.reth`:
+
+- `HOST_IP` - External IP address for NAT traversal (defaults to 0.0.0.0)
+
+## Hardware Requirements
+
+### Geth Full Nodes
+
+- AWS Instance: i4i.12xlarge
+- Storage: raid0 of all local nvme drives with ext4 filesystem
+- Base team runs Geth with Pebbledb for full nodes
+
+### Reth Archive Nodes
+
+- AWS Instance: i7ie.6xlarge
+- Disk: Raid0 of both disks (/dev/nvme1n1,/dev/nvme2n1)
+- Filesystem: ext4
+
+### Other Clients
+
+- Modern multi-core CPU with good single-core performance
+- At least 16 GB RAM (32 GB recommended)
+- Locally attached NVMe SSD drive
+- Storage: (2 × current_chain_size) + snapshot_size + 20% buffer
+
+**Note:** For Amazon EBS, use `io2 block express` to avoid latency issues during sync.
+
+## Docker Configuration
+
+The repository includes Docker configurations for both Geth and Reth clients:
+
+- `geth/` - Contains Geth-specific Dockerfile and entrypoint scripts
+- `reth/` - Contains Reth-specific Dockerfile and entrypoint scripts
+
+Each client folder contains:
+
+- `Dockerfile` - Builds the client and op-node
+- `geth-entrypoint`/`reth-entrypoint` - Execution service entrypoint
+- `op-geth-entrypoint`/`op-reth-entrypoint` - Op-node service entrypoint
+
+## Data Persistence
+
+By default, data is stored in `${PROJECT_ROOT}/${CLIENT}-data`. You can override this by modifying `HOST_DATA_DIR` in `.env`.
+
+To load a snapshot, extract it into the `$HOST_DATA_DIR` folder. See [Base docs](https://docs.base.org/guides/run-a-base-node/#snapshots) for snapshot URLs.
+
+## Single Container Mode
+
+For Kubernetes or other single-container deployments, use the `supervisord` entrypoint:
+
+```bash
+docker run --env-file .env -e OP_NODE_L2_ENGINE_RPC=ws://localhost:8551 -e OP_NODE_RPC_PORT=7545 ghcr.io/base-org/node:latest
 ```
-docker compose up --build
-```
 
-> [!NOTE]
-> To run the node using a supported client, you can use the following command:
-> `CLIENT=supported_client docker compose up --build`
-> 
-> Supported clients:
-> - geth
-> - reth
-> - nethermind
+## Syncing
 
-4. You should now be able to `curl` your Base node:
+Sync speed depends on your L1 node. Check sync status with:
 
-```
-curl -d '{"id":0,"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false]}' \
+```bash
+curl -s -d '{"id":0,"jsonrpc":"2.0","method":"optimism_syncStatus"}' \
   -H "Content-Type: application/json" http://localhost:8545
 ```
 
-Note: Some L1 nodes (e.g. Erigon) do not support fetching storage proofs. You can work around this by specifying `--l1.trustrpc` when starting op-node (add it in `op-node-entrypoint` and rebuild the docker image with `docker compose build`.) Do not do this unless you fully trust the L1 node provider.
+## Troubleshooting
 
-#### Persisting Data
+If you encounter issues:
 
-By default, the data directory is stored in `${PROJECT_ROOT}/geth-data`. You can override this by modifying the value of
-`GETH_HOST_DATA_DIR` variable in the [`.env`](./.env) file.
-
-To load a [snapshot](#snapshots) you can extract the snapshot into the `$GETH_HOST_DATA_DIR` folder.
-
-#### Running in single container with `supervisord`
-
-If you'd like to run the node in a single container instead of `docker-compose`, you can use the `supervisord` entrypoint.
-This is useful for running the node in a Kubernetes cluster, for example.
-
-Note that you'll need to override some of the default configuration that assumes a multi-container environment (`OP_NODE_L2_ENGINE_RPC`) and any port conflicts (`OP_NODE_RPC_PORT`).
-Example:
-
-```
-docker run --env-file .env.sepolia -e OP_NODE_L2_ENGINE_RPC=ws://localhost:8551 -e OP_NODE_RPC_PORT=7545 ghcr.io/base-org/node:latest
-```
-
-### Snapshots
-
-You can fetch the latest snapshots via the URLs provided in the [Base docs](https://docs.base.org/guides/run-a-base-node/#snapshots).
-
-### Syncing
-
-Sync speed depends on your L1 node, as the majority of the chain is derived from data submitted to the L1. You can check your syncing status using the `optimism_syncStatus` RPC on the `op-node` container. Example:
-
-```
-command -v jq  &> /dev/null || { echo "jq is not installed" 1>&2 ; }
-echo Latest synced block behind by: \
-$((($( date +%s )-\
-$( curl -s -d '{"id":0,"jsonrpc":"2.0","method":"optimism_syncStatus"}' -H "Content-Type: application/json" http://localhost:7545 |
-   jq -r .result.unsafe_l2.timestamp))/60)) minutes
-```
+1. Open a [GitHub issue](https://github.com/base-org/node/issues/new/choose)
+2. Join our [Discord](https://discord.gg/buildonbase)
+3. Connect your GitHub account in Discord: `server menu` > `Linked Roles` > `connect GitHub`
+4. Report in `#🛟|developer-support` or `🛠｜node-operators`
 
 ## Disclaimer
-
-We’re excited for you to build on Base 🔵 — but we want to make sure that you understand the nature of the node software and smart contracts offered here.
 
 THE NODE SOFTWARE AND SMART CONTRACTS CONTAINED HEREIN ARE FURNISHED AS IS, WHERE IS, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, NON- INFRINGEMENT, OR FITNESS FOR ANY PARTICULAR PURPOSE. IN PARTICULAR, THERE IS NO REPRESENTATION OR WARRANTY THAT THE NODE SOFTWARE AND SMART CONTRACTS WILL PROTECT YOUR ASSETS — OR THE ASSETS OF THE USERS OF YOUR APPLICATION — FROM THEFT, HACKING, CYBER ATTACK, OR OTHER FORM OF LOSS OR DEVALUATION.
 

@@ -12,6 +12,7 @@ P2P_PORT="${P2P_PORT:-30303}"
 ADDITIONAL_ARGS=""
 OP_GETH_GCMODE="${OP_GETH_GCMODE:-full}"
 OP_GETH_SYNCMODE="${OP_GETH_SYNCMODE:-full}"
+DB_ENGINE="${DB_ENGINE:-pebble}" # Default to pebble, can be set to leveldb
 
 if [[ -z "$OP_NODE_NETWORK" ]]; then
     echo "expected OP_NODE_NETWORK to be set" 1>&2
@@ -20,6 +21,13 @@ fi
 
 mkdir -p $GETH_DATA_DIR
 
+# Ensure we have a JWT secret
+if [[ -z "${OP_NODE_L2_ENGINE_AUTH_RAW:-}" ]]; then
+    OP_NODE_L2_ENGINE_AUTH_RAW=$(openssl rand -hex 32)
+    export OP_NODE_L2_ENGINE_AUTH_RAW
+fi
+
+# Write the JWT secret to the auth file
 echo "$OP_NODE_L2_ENGINE_AUTH_RAW" > "$OP_NODE_L2_ENGINE_AUTH"
 
 if [ "${OP_GETH_ETH_STATS+x}" = x ]; then
@@ -45,6 +53,7 @@ fi
 exec ./geth \
     --datadir="$GETH_DATA_DIR" \
     --verbosity="$VERBOSITY" \
+    --db.engine="$DB_ENGINE" \
     --http \
     --http.corsdomain="*" \
     --http.vhosts="*" \

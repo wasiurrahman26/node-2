@@ -42,6 +42,13 @@ else
 fi
 export OP_NODE_P2P_ADVERTISE_IP=$PUBLIC_IP
 
+# Ensure we have a JWT secret
+if [[ -z "${OP_NODE_L2_ENGINE_AUTH_RAW:-}" ]]; then
+    OP_NODE_L2_ENGINE_AUTH_RAW=$(openssl rand -hex 32)
+    export OP_NODE_L2_ENGINE_AUTH_RAW
+fi
+
+# Write the JWT secret to the auth file
 echo "$OP_NODE_L2_ENGINE_AUTH_RAW" > "$OP_NODE_L2_ENGINE_AUTH"
 
 exec ./op-node

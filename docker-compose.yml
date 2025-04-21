@@ -4,32 +4,92 @@ services:
       context: .
       dockerfile: ${CLIENT}/Dockerfile
     ports:
-      - "8545:8545"       # RPC
-      - "8546:8546"       # websocket
-      - "7301:6060"       # metrics
-      - "30303:30303"     # P2P TCP
+      - "8545:8545" # RPC
+      - "8546:8546" # websocket
+      - "7301:6060" # metrics
+      - "30303:30303" # P2P TCP
       - "30303:30303/udp" # P2P UDP
-    command: [ "bash", "./execution-entrypoint" ]
+    command: >
+      bash -c "
+      if [ -z \"$$OP_NODE_L2_ENGINE_AUTH_RAW\" ]; then
+        export OP_NODE_L2_ENGINE_AUTH_RAW=$$(openssl rand -hex 32)
+      fi &&
+      bash ./execution-entrypoint
+      "
     volumes:
-        - ${HOST_DATA_DIR}:/data
+      - ${HOST_DATA_DIR}:/data
     env_file:
-      # select your network here:
-#      - .env.sepolia
-#      - .env.mainnet
+      # select your network and client here:
+      # For Geth:
+      # - .env.geth.mainnet
+      # - .env.geth.sepolia
+      # For Reth:
+      # - .env.reth.mainnet
+      # - .env.reth.sepolia
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          cpus: "2"
+          memory: 4G
+    restart: unless-stopped
+    networks:
+      - base-chain
+
   node:
     build:
       context: .
       dockerfile: ${CLIENT}/Dockerfile
     depends_on:
-      - execution
+      execution:
+        condition: service_healthy
     ports:
-      - "7545:8545"     # RPC
-      - "9222:9222"     # P2P TCP
+      - "7545:8545" # RPC
+      - "9222:9222" # P2P TCP
       - "9222:9222/udp" # P2P UDP
-      - "7300:7300"     # metrics
-      - "6060:6060"     # pprof
-    command: [ "bash", "./op-node-entrypoint" ]
+      - "7300:7300" # metrics
+      - "6060:6060" # pprof
+    command: >
+      bash -c "
+      if [ -z \"$$OP_NODE_L2_ENGINE_AUTH_RAW\" ]; then
+        export OP_NODE_L2_ENGINE_AUTH_RAW=$$(openssl rand -hex 32)
+      fi &&
+      bash ./op-node-entrypoint
+      "
     env_file:
-      # select your network here:
-#      - .env.sepolia
-#      - .env.mainnet
+      # select your network and client here:
+      # For Geth:
+      # - .env.geth.mainnet
+      # - .env.geth.sepolia
+      # For Reth:
+      # - .env.reth.mainnet
+      # - .env.reth.sepolia
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    restart: unless-stopped
+    networks:
+      - base-chain
+
+networks:
+  base-chain:
+    driver: bridge
